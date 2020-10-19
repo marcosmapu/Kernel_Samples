@@ -1,0 +1,5 @@
+build with:
+gcc -Wall -o hello hello.c
+
+run with:
+strace ./hello
