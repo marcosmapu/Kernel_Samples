@@ -4,6 +4,7 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
+#include <linux/mutex.h>
 #define	DEVICE_NAME "ebbchar"
 #define CLASS_NAME "ebb"
 
@@ -18,6 +19,7 @@ static short size_of_message;
 static int numberOpens = 0;
 static struct class*  ebbcharClass  = NULL;
 static struct device* ebbcharDevice = NULL;
+static DEFINE_MUTEX(ebbchar_mutex);
  
 // The prototype functions for the character driver -- must come before the struct definition
 static int     dev_open(struct inode *, struct file *);
@@ -72,6 +74,7 @@ static int __init ebbchar_init(void){
       return PTR_ERR(ebbcharDevice);
    }
    printk(KERN_INFO "EBBChar: device class created correctly\n"); // Made it! device was initialized
+   mutex_init(&ebbchar_mutex);
    return 0;
 }
  
@@ -80,6 +83,7 @@ static int __init ebbchar_init(void){
  *  code is used for a built-in driver (not a LKM) that this function is not required.
  */
 static void __exit ebbchar_exit(void){
+   mutex_destroy(&ebbchar_mutex);
    device_destroy(ebbcharClass, MKDEV(majorNumber, 0));     // remove the device
    class_unregister(ebbcharClass);                          // unregister the device class
    class_destroy(ebbcharClass);                             // remove the device class
@@ -93,6 +97,10 @@ static void __exit ebbchar_exit(void){
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_open(struct inode *inodep, struct file *filep){
+   if (!mutex_trylock(&ebbchar_mutex)){
+	   printk(KERN_ALERT "EBBChar: Device in use by another process");
+	   return -EBUSY;
+   }
    numberOpens++;
    printk(KERN_INFO "EBBChar: Device has been opened %d time(s)\n", numberOpens);
    return 0;
@@ -142,6 +150,7 @@ static ssize_t dev_write(struct file *filep, const char *buffer, size_t len, lof
  *  @param filep A pointer to a file object (defined in linux/fs.h)
  */
 static int dev_release(struct inode *inodep, struct file *filep){
+   mutex_unlock(&ebbchar_mutex);
    printk(KERN_INFO "EBBChar: Device successfully closed\n");
    return 0;
 }
