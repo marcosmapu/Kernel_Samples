@@ -5,7 +5,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/mutex.h>
-#include <cdev.h>
+#include <linux/cdev.h>
 
 #define DEVICE_NAME "mapu char driver module sample"
 #define CLASS_NAME "sample"
@@ -22,6 +22,7 @@ struct deviceData
 	struct cdev cdev;
 	int num;
 	char status;
+	//ssize_t size;
 };
 
 struct deviceData devs[DEVICES];
@@ -33,6 +34,8 @@ static int devOpen(struct inode *inode, struct file *file)
 	struct deviceData *devData;
 	devData = container_of(inode->i_cdev, struct deviceData, cdev);
 	file->private_data = devData;
+	
+	return 0;
 };
 
 static int devClose(struct inode *inode, struct file *file)
@@ -40,39 +43,26 @@ static int devClose(struct inode *inode, struct file *file)
 	return 0;
 };
 
-static ssize_t devRead(struct file *file, char __user *userBuf, ssize_t count, loff_t *offset)
+static ssize_t devRead(struct file *file, char __user *userBuf, size_t count, loff_t *offset)
 {
 	struct deviceData *devData = (struct deviceData *) file->private_data;
-	ssize_t len = min(devData->size - *offset, size);
 	
-	if (len <= 0){
-		return 0;
+	if (copy_to_user(userBuf,"1",1)) {
+		return -EIO;
 	}
-	
-		// read from devData->buffer to user buffer
-		if (copy_to_user(userBuf, devData->buffer + *offset, len))
-			return -EFAULT;
-	
-		*offset += len;
-		return len;	
-	
+	return 1;
 };
 
-static ssize_t devWrite(struct file *file, const char __user *userBuf, ssize_t count, loff_t *offset)
+static ssize_t devWrite(struct file *file, const char __user *userBuf, size_t count, loff_t *offset)
 {
 		struct deviceData *devData = (struct deviceData *) file->private_data;
-		ssize_t len = min(devData->size - *offset, size);
+		char kbuf = 0;
 		
-		if (len <= 0){
-			return 0;
+		if (copy_from_user(&kbuf, userBuf, 1)){
+				return -EFAULT;
 		}
 		
-		// read from user buffer to devData->buffer
-		if (copy_from_user(userBuf, devData->buffer + *offset, len))
-			return -EFAULT;
-	
-		*offset += len;
-		return len;
+		return count;
 };
 
 struct file_operations fops = 
