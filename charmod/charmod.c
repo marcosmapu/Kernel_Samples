@@ -17,6 +17,8 @@ MODULE_AUTHOR("mmapurunga");
 MODULE_DESCRIPTION("skeleton to char driver modules");
 MODULE_VERSION("1.0");
 
+static DEFINE_MUTEX(charMutex);
+
 struct deviceData 
 {
 	struct cdev cdev;
@@ -31,6 +33,11 @@ static dev_t deviceNumber;
 
 static int devOpen(struct inode *inode, struct file *file)
 {
+	// Check if module is in use by trying to lock the mutex
+	if (!mutex_trylock(&charMutex)){
+			printk(KERN_DEBUG "Char Module already in use!\n");
+			return -EBUSY;
+	}
 	struct deviceData *devData;
 	devData = container_of(inode->i_cdev, struct deviceData, cdev);
 	file->private_data = devData;
@@ -40,6 +47,7 @@ static int devOpen(struct inode *inode, struct file *file)
 
 static int devClose(struct inode *inode, struct file *file)
 {
+	mutex_unlock(&charMutex);
 	return 0;
 };
 
@@ -78,6 +86,9 @@ static int __init char_init(void)
 {
 	int i, err;
 	
+	// Initializing mutex
+	mutex_init(&charMutex);
+	
 	// Driver registration (allocating a major number and 'DEVICES' minor numbers)
 	err = alloc_chrdev_region(&deviceNumber, 0, DEVICES, DEVICE_NAME);
 
@@ -105,6 +116,9 @@ static int __init char_init(void)
 
 static void __exit char_exit(void)
 {
+	// Removing mutex the allocated mutex
+	mutex_destroy(&charMutex);
+	
 	int i;
 	
 	// deleting devices
